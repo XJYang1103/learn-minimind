@@ -30,9 +30,9 @@
 
 PO（Policy Optimization，策略优化）算法是一大类用于优化语言模型策略的方法。无论是 PPO、GRPO、DPO 还是 CISPO，它们都可以统一到一个框架下：
 
-\[
+$$
 \mathcal{L}_{PO} = \mathbb{E}\left[f(r_t) \cdot g(A_t) - h(KL_t)\right]
-\]
+$$
 
 其中：
 - **策略项 \( f(r_t) \)**：与概率比相关的函数，描述"策略更新的方向和幅度"
@@ -43,9 +43,9 @@ PO（Policy Optimization，策略优化）算法是一大类用于优化语言�
 
 所有 PO 算法的核心概念——概率比：
 
-\[
+$$
 r_t = \frac{\pi_\theta(a_t | s_t)}{\pi_{old}(a_t | s_t)}
-\]
+$$
 
 - \( \pi_\theta \)：当前策略（正在优化的模型）
 - \( \pi_{old} \)：旧策略（采样数据时的模型）
@@ -75,9 +75,9 @@ PPO（Proximal Policy Optimization）的目标是最大化期望奖励，同时�
 
 最原始的策略梯度：
 
-\[
+$$
 \mathcal{L}_{PG} = -\mathbb{E}[r_t \cdot A_t]
-\]
+$$
 
 问题：如果某个 \( r_t \) 特别大（当前策略和旧策略差异很大），梯度会爆炸，导致训练不稳定。
 
@@ -85,9 +85,9 @@ PPO（Proximal Policy Optimization）的目标是最大化期望奖励，同时�
 
 PPO 的核心创新就是 clip（截断）机制：
 
-\[
+$$
 \mathcal{L}_{PPO} = -\mathbb{E}\left[\min\left(r_t \cdot A_t, \ \text{clip}(r_t, 1-\varepsilon, 1+\varepsilon) \cdot A_t\right)\right]
-\]
+$$
 
 其中 \( \varepsilon \) 通常取 0.2。
 
@@ -122,9 +122,9 @@ PPO 的核心创新就是 clip（截断）机制：
 
 优势函数衡量"某个动作比平均水平好多少"：
 
-\[
+$$
 A_t = R_t - V(s_t)
-\]
+$$
 
 - \( R_t \)：从时间步 \( t \) 开始的累积奖励
 - \( V(s_t) \)：状态 \( s_t \) 的价值估计（由 Critic 网络给出）
@@ -137,9 +137,9 @@ A_t = R_t - V(s_t)
 
 实践中使用 GAE 来计算更平滑的优势估计：
 
-\[
+$$
 \hat{A}_t = \sum_{l=0}^{T-t} (\gamma \lambda)^l \delta_{t+l}
-\]
+$$
 
 其中 \( \delta_t = r_t + \gamma V(s_{t+1}) - V(s_t) \) 是 TD 误差。
 
@@ -147,9 +147,9 @@ A_t = R_t - V(s_t)
 
 PPO 的完整训练目标包含三个部分：
 
-\[
+$$
 \mathcal{L} = \mathcal{L}_{PPO} + c_1 \cdot \mathcal{L}_{VF} + c_2 \cdot \mathcal{L}_{entropy}
-\]
+$$
 
 - \( \mathcal{L}_{PPO} \)：策略损失（clip 版本）
 - \( \mathcal{L}_{VF} \)：Critic 网络的价值函数损失（MSE）
@@ -183,15 +183,15 @@ GRPO 的关键洞见：不需要精确估计每个状态的价值，只需要知
 
 对于同一个 prompt，生成 \( G \) 个回答 \( \{y_1, y_2, ..., y_G\} \)，用奖励模型给每个回答打分 \( \{r_1, r_2, ..., r_G\} \)，然后用组内标准化来计算优势：
 
-\[
+$$
 \tilde{A}_i = \frac{r_i - \text{mean}(r_1, ..., r_G)}{\text{std}(r_1, ..., r_G)}
-\]
+$$
 
 ### 3.3 GRPO 的损失函数
 
-\[
+$$
 \mathcal{L}_{GRPO} = -\frac{1}{G}\sum_{i=1}^{G}\left[\min\left(r_t^{(i)} \cdot \tilde{A}_i, \ \text{clip}(r_t^{(i)}, 1-\varepsilon, 1+\varepsilon) \cdot \tilde{A}_i\right)\right] + \beta \cdot D_{KL}(\pi_\theta \| \pi_{ref})
-\]
+$$
 
 和 PPO 很像，但有两个关键区别：
 1. **优势函数不同**：用组内相对排名代替 Critic 估计
@@ -405,9 +405,9 @@ MiniMind 还实现了 CISPO（Confidence Interval based Safe Policy Optimization
 
 **答**：
 
-\[
+$$
 \mathcal{L} = -\mathbb{E}\left[\min(r_t \cdot A_t, \text{clip}(r_t, 1-\varepsilon, 1+\varepsilon) \cdot A_t)\right] + c_1 \cdot \mathcal{L}_{VF} + c_2 \cdot \mathcal{L}_{entropy} + \beta \cdot D_{KL}
-\]
+$$
 
 包含四个部分：策略 clip 损失、价值函数损失、熵奖励和 KL 惩罚。
 
