@@ -4,7 +4,7 @@
 
 ---
 
-## 📋 本节目标
+# 📋 本节目标
 
 学完本节，你将能够：
 
@@ -16,7 +16,7 @@
 
 ---
 
-## 🔗 前置知识
+# 🔗 前置知识
 
 - [L01 · 什么是大语言模型](L01-什么是大语言模型.md)——了解 LLM 的基本工作方式
 - [L04 · MiniMind 项目导览](L04-MiniMind项目导览.md)——知道 MiniMind 的项目结构
@@ -24,15 +24,15 @@
 
 ---
 
-## 1. 什么是 Tokenizer？
+# 1. 什么是 Tokenizer？
 
-### 1.1 人说文字，模型只懂数字
+## 1.1 人说文字，模型只懂数字
 
 想象你要和一个只认识数字的外星人交流。你说"你好"，外星人一脸懵。但如果你们约定好一本"字典"——"你"=42，"好"=17——那你把 `[42, 17]` 发过去，外星人就能理解了。
 
 **Tokenizer（分词器）就是这本字典**。它负责两件事：
 
-- **编码（Encode）**：把人类的文字转成数字序列（token ids）
+- **编码（Encode）**：把人类的文字转成**数字编号**序列（token ids）
 - **解码（Decode）**：把数字序列转回人类文字
 
 ```
@@ -43,7 +43,26 @@
 [198, 45, 3012, 67] → Tokenizer 解码 → "是的很舒服"
 ```
 
-### 1.2 为什么不能一个字一个数字？
+## Tokenizer和embedding的区别
+
+- Tokenizer 把文本变成**整数 ID**
+- Embedding 再把每个ID变成浮点**向量**。
+```
+原始文本
+“我喜欢学习”
+    ↓ Tokenizer
+token     ["我", "喜欢", "学习"]
+token ID  [12,   35,     89]
+    ↓ Embedding 查表
+12 → [0.2, −0.5, 0.8, …]
+35 → [0.7,  0.1, −0.3, …]
+89 → [−0.4, 0.6, 0.9, …]
+```
+
+
+
+
+## 1.2 为什么不能一个字一个数字？
 
 你可能想：中文就几千个常用字，英文就 26 个字母，直接建一个"字→数字"的映射不就行了？
 
@@ -59,15 +78,15 @@
 
 ---
 
-## 2. BPE 算法详解
+# 2. BPE 算法详解
 
-### 2.1 核心思想：合并频率最高的字符对
+## 2.1 核心思想：合并频率最高的字符对
 
 BPE（Byte Pair Encoding，字节对编码）最初是一种数据压缩算法，后来被引入 NLP 领域。它的思想极其简洁：
 
 > **反复找到语料中出现频率最高的相邻字符对，把它们合并成一个新符号，直到词表达到目标大小。**
 
-### 2.2 手动推演 BPE
+## 2.2 手动推演 BPE
 
 假设我们的训练语料只有这几个词（数字表示出现次数）：
 
@@ -133,7 +152,7 @@ w i d est  : 3
 
 如此反复，直到词表大小达到我们设定的目标（比如 6400）。
 
-### 2.3 BPE 的优雅之处
+## 2.3 BPE 的优雅之处
 
 1. **自动发现子词**：高频的词会被完整保留（如 "the"、"的"），低频词会被拆解
 2. **无 OOV 问题**：因为最坏情况下退化为字符级，所以永远不会遇到"未登录词"
@@ -141,9 +160,9 @@ w i d est  : 3
 
 ---
 
-## 3. MiniMind 的 Tokenizer
+# 3. MiniMind 的 Tokenizer
 
-### 3.1 minimind_tokenizer：小而精的词表
+## 3.1 minimind_tokenizer：小而精的词表
 
 MiniMind 使用自训练的 `minimind_tokenizer`，词表大小仅 **6400**。
 
@@ -157,7 +176,7 @@ MiniMind 使用自训练的 `minimind_tokenizer`，词表大小仅 **6400**。
 | Qwen2 | 151,643 | 目前主流模型中最大之一 |
 | **MiniMind** | **6,400** | **极简设计，专为教学和轻量部署** |
 
-### 3.2 词表大小的权衡
+## 3.2 词表大小的权衡
 
 **大词表的好处：**
 
@@ -177,7 +196,7 @@ MiniMind 使用自训练的 `minimind_tokenizer`，词表大小仅 **6400**。
 
 > 因为 MiniMind 只有 64M 参数，如果用 Qwen2 的词表（151K），光 Embedding + lm_head 就要占掉绝大部分参数量，留给 Transformer 核心层的参数就不够了。6400 的词表虽然编码效率低一些，但能让模型把参数集中在"思考"上。
 
-### 3.3 压缩比
+## 3.3 压缩比
 
 **压缩比（Compression Ratio）** 衡量的是 Tokenizer 的编码效率：
 
@@ -188,18 +207,29 @@ $$
 - MiniMind 的中文压缩比约 **1.5 ~ 1.7 字符/token**
 - Qwen2 的中文压缩比约 **2.4 ~ 3.0 字符/token**
 
-压缩比越高，同样长度的文本需要的 token 越少，模型"看到"的上下文窗口就越大。
+- 压缩比越高，同样多的 token 通常能装下**更多原始文字**，模型"看到"的上下文窗口就越大。
+### 压缩比也不是越大越好，需要平衡。
+
+- 收录更多长词片段，可以缩短序列，但通常需要更大的词表，使 Embedding 和输出层变大。
+- 太长的片段可能出现次数很少，对应向量得到的训练不足。
+- 适当拆分能复用词的组成部分，例如 "learning"、`"learned"可以共享"learn"` 这个片段。
+
+比如，压缩比=3，一个token/3个字符：
+>"学习中" → ID 520  把这三个字记为一个token序号
+
+
 
 ---
 
-## 4. 特殊 Token
+# 4. 特殊 Token
 
-### 4.1 什么是特殊 Token？
+## 4.1 什么是特殊 Token？
 
-除了普通文字对应的 token，Tokenizer 还会定义一些**特殊 token**，用于标记序列的结构信息：
+除了普通文字对应的 序号token，Tokenizer 还会定义一些**特殊 token**，用于标记序列的结构信息：
 
 | 特殊 Token | 作用 |
 |------------|------|
+| `12,25,225...`|普通token就是`序号`|
 | `<|im_start|>` | 对话消息的开始标记（ChatML 格式） |
 | `<|im_end|>` | 对话消息的结束标记 |
 | `<s>` | 序列开始（BOS, Begin of Sequence） |
@@ -209,7 +239,7 @@ $$
 | `<pad>` | 填充标记（用于 batch 中对齐序列长度） |
 | `<unk>` | 未知标记（BPE 很少用到） |
 
-### 4.2 chat_template：对话的格式说明书
+## 4.2 chat_template：对话的格式说明书
 
 当你用 ChatGPT 聊天时，你发的每条消息和 AI 的回复之间，其实有严格的格式规范。这就是 **chat_template**。
 
@@ -232,31 +262,83 @@ chat_template 的作用：
 
 ---
 
-## 5. 评估指标：BPB vs PPL
+# 5. 评估指标：BPB vs PPL  都是越低越好
 
-### 5.1 PPL（Perplexity，困惑度）
+## 5.1 PPL（Perplexity，困惑度） 
 
-PPL 是评估语言模型最常用的指标：
+PPL 衡量的是，模型能多好地预测一段真实文本中依次出现的 token。
+- 真实 token 得到的概率越高，PPL 越低
 
 $$
 \text{PPL} = \exp\left(-\frac{1}{N}\sum_{i=1}^{N}\log P(x_i | x_{<i})\right)
 $$
 
-直觉理解：PPL 表示模型在预测下一个 token 时的"困惑程度"。PPL=10 意味着模型平均在 10 个选项中犹豫。
+- 即exp(平均 token 交叉熵 Loss)，里面的P是条件概率
+```
+看到“我”，给真实下一个 token“爱”的概率为 0.5
+看到“我 爱”，给真实下一个 token“学习”的概率为 0.25
 
-**PPL 的问题**：它依赖于 Tokenizer！同一句话，词表不同，token 数不同，PPL 不可直接比较。
+平均 Loss = −[ln(0.5) + ln(0.25)] ÷ 2
+          ≈ 1.040
 
-### 5.2 BPB（Bits Per Byte）
+PPL = exp(平均 Loss)
+    ≈ exp(1.040)
+    ≈ 2.83
+```
 
-BPB 是一种与 Tokenizer 无关的评估指标：
+直觉理解：PPL 表示模型在预测下一个 token 时的"困惑程度"。
+
+**PPL 的问题**：它`依赖于 Tokenizer`！同一句话，词表不同，token 数不同，PPL 不可直接比较。
+
+```
+A  ["learning"]       1 个 token
+B  ["learn", "ing"]   2 个 token
+
+假设AB给整个字符串的概率恰好都为 0.04（B有0.04的概率同时获得"learn"和"ing"）
+
+A   P("learning") = 0.04
+    PPL = exp(−ln0.04 ÷ 1) = 25
+
+B   P("learn") × P("ing" | "learn") = 0.2 × 0.2 = 0.04
+    PPL = exp(−ln0.04 ÷ 2) = 5
+
+```
+虽然AB预测出learning的概率是一样的，预测效果相同，但是由于换了tokenizer，PPL就不一样了。
+
+
+## 5.2 BPB（Bits Per Byte）越低越好
+
+BPB 是一种与` Tokenizer 无关`的评估指标：
+
+衡量模型平均需要多少 bit 来编码一个字节。越低，表示模型给真实文本分配的概率越高。因为：
+
+`分子是损失，损失越低越好`
 
 $$
-\text{BPB} = \frac{\text{总 loss（以 bit 计）}}{\text{原始文本的字节数}}
+\text{BPB} = \frac{\text{总文本概率loss（以 bit 计）}}{\text{原始文本的字节数}}
 $$
 
-BPB 的优点：不受词表大小影响，可以跨模型公平比较。
+假设 A、B 给预测出"learning"的概率都是 0.04。
+```
+总 Loss（bit）= −log₂(0.04) ≈ 4.64 bit
 
-### 5.3 为什么要关心这些？
+BPB = 4.64 ÷ 8 ≈ 0.58 bit/byte   # A和B都是0.58
+```
+归一化单位不依赖 Tokenizer”指的是：
+- 无论怎样分词，最后都除以原始文本的字节数。
+
+例如，两个模型都评估 "learning"。
+```
+A 分词为 ["learning"]       → 1 个 token
+B 分词为 ["learn", "ing"]   → 2 个 token
+
+但原始文本都是 "learning" → 8 字节
+```
+- 所以预测出"learning"的概率相同
+
+BPB 的优点：不受词表大小影响，可以跨模型公平比较，但仍需要控制评估条件。
+
+## 5.3 为什么要关心这些？
 
 | 场景 | 适合用哪个 |
 |------|-----------|
@@ -266,9 +348,9 @@ BPB 的优点：不受词表大小影响，可以跨模型公平比较。
 
 ---
 
-## 6. MiniMind 源码解读
+# 6. MiniMind 源码解读
 
-### 6.1 Tokenizer 的加载与使用
+## 6.1 Tokenizer 的加载与使用
 
 在 MiniMind 项目中，Tokenizer 的使用非常直接：
 
@@ -283,7 +365,7 @@ print(tokens)          # [356, 1892, 478, ...]
 print(tokenizer.decode(tokens))  # "你好，世界！"
 ```
 
-### 6.2 词表文件结构
+## 6.2 词表文件结构
 
 MiniMind 的 Tokenizer 目录中包含：
 
@@ -295,7 +377,7 @@ minimind_tokenizer/
 └── vocab.json              ← 词表（token → id）
 ```
 
-### 6.3 与模型配置的关联
+## 6.3 与模型配置的关联
 
 在 `model/model_minimind.py` 的模型配置中：
 
@@ -312,9 +394,9 @@ class LMConfig:
 
 ---
 
-## 7. 动手实验
+# 7. 动手实验
 
-### 7.1 对比不同 Tokenizer 的编码效果
+## 7.1 对比不同 Tokenizer 的编码效果
 
 ```python
 text = "MiniMind是一个仅有64M参数的大语言模型"
@@ -330,7 +412,7 @@ print(f"Qwen2: {len(qwen_tokens)} tokens")
 
 你会发现 MiniMind 需要更多的 token 来编码同样的文本，这就是小词表的代价。
 
-### 7.2 查看特殊 Token
+## 7.2 查看特殊 Token
 
 ```python
 print(tokenizer.special_tokens_map)
@@ -342,17 +424,17 @@ print(tokenizer.all_special_tokens)
 
 ---
 
-## 🎤 面试考点
+# 🎤 面试考点
 
-### Q1：请解释 BPE 算法的原理
+## Q1：请解释 BPE 算法的原理
 
 **参考答案**：BPE（Byte Pair Encoding）是一种子词分词算法。它从字符级开始，反复统计语料中相邻符号对的出现频率，每次将频率最高的符号对合并成一个新符号，直到词表大小达到预设值。BPE 的优点是能自动发现有意义的子词单元，且不会出现 OOV（Out of Vocabulary）问题。
 
-### Q2：MiniMind 的词表只有 6400，为什么这么小？会有什么影响？
+## Q2：MiniMind 的词表只有 6400，为什么这么小？会有什么影响？
 
 **参考答案**：MiniMind 的总参数量只有 64M，如果使用大词表（如 Qwen2 的 151K），光 Embedding 层就要占用大量参数（151K × 768 ≈ 116M，已超过总参数量），留给 Transformer 核心层的参数就不够了。小词表的代价是编码效率较低，同样的文本需要更多 token，但这是模型规模限制下的合理选择。
 
-### Q3：Tokenizer 如何影响模型性能？
+## Q3：Tokenizer 如何影响模型性能？
 
 **参考答案**：Tokenizer 的质量直接影响模型的方方面面：
 1. **编码效率**：词表越大，序列越短，模型能看到更长的上下文
@@ -360,21 +442,21 @@ print(tokenizer.all_special_tokens)
 3. **语义粒度**：好的分词能保留词级语义，差的分词会把词拆得支离破碎
 4. **多语言能力**：词表中某种语言的覆盖度决定了模型对该语言的处理能力
 
-### Q4：什么是 chat_template？为什么需要它？
+## Q4：什么是 chat_template？为什么需要它？
 
 **参考答案**：chat_template 是定义多轮对话格式的模板，规定了 system、user、assistant 等角色的消息如何组织。它的作用是：（1）让模型区分不同角色的发言；（2）标记对话边界；（3）确保训练和推理时的格式一致。常见格式有 ChatML（`<|im_start|>/<|im_end|>`）和 LLaMA 格式。
 
-### Q5：BPB 和 PPL 有什么区别？什么时候用哪个？
+## Q5：BPB 和 PPL 有什么区别？什么时候用哪个？
 
 **参考答案**：PPL（Perplexity）依赖于 Tokenizer，不同词表的模型 PPL 不可直接比较。BPB（Bits Per Byte）是按原始文本字节计算的指标，与 Tokenizer 无关，适合跨模型对比。同一个模型的不同版本用 PPL 即可；不同词表的模型对比必须用 BPB。
 
-### Q6：为什么说 BPE 不会出现 OOV 问题？
+## Q6：为什么说 BPE 不会出现 OOV 问题？
 
 **参考答案**：因为 BPE 的词表一定包含所有基础字符（至少是所有字节值）。即使遇到从未见过的词，BPE 也能将其退化为字符级别的编码。虽然编码效率低，但不会出现无法编码的情况。
 
 ---
 
-## ✅ 自测题
+# ✅ 自测题
 
 1. **填空**：BPE 算法每一步合并的是出现频率最高的 ______。
 2. **计算**：MiniMind 的 Embedding 层参数量是多少？（vocab_size=6400, d_model=768）
@@ -395,7 +477,7 @@ print(tokenizer.all_special_tokens)
 
 ---
 
-## 🎨 哆啦A梦图解
+# 🎨 哆啦A梦图解
 
 ![BPE分词过程](../assets/comics/02-tokenizer.png)
 
@@ -403,13 +485,13 @@ print(tokenizer.all_special_tokens)
 
 ---
 
-## 🔬 源码深度解析
+# 🔬 源码深度解析
 
-### MiniMind 对应文件
+## MiniMind 对应文件
 - 文件路径：`model/minimind_tokenizer/` 目录及 tokenizer 训练脚本
 - 关键代码位置：BPE 合并规则定义在 `tokenizer.json`，词表映射在 `vocab.json`
 
-### 核心代码逐行解读
+## 核心代码逐行解读
 
 ```python
 # MiniMind Tokenizer 训练核心逻辑（基于 HuggingFace tokenizers 库）
@@ -437,7 +519,7 @@ tokenizer.train(files=["corpus.txt"], trainer=trainer)
 # 训练完成后 tokenizer.json 中保存了完整的合并规则（merges）和词表（vocab）
 ```
 
-### 设计决策解析
+## 设计决策解析
 
 1. **ByteLevel 预分词的必要性**：中文不像英文有天然空格分隔。ByteLevel 将原始文本先拆为字节序列，再在字节层面做 BPE 合并。这保证了无论遇到何种语言或符号，都不会出现 OOV（Out-of-Vocabulary）问题。
 
@@ -447,9 +529,9 @@ tokenizer.train(files=["corpus.txt"], trainer=trainer)
 
 ---
 
-## 🧪 动手实验
+# 🧪 动手实验
 
-### 实验 1：手动模拟 BPE 合并过程
+## 实验 1：手动模拟 BPE 合并过程
 
 ```python
 from collections import Counter
@@ -524,7 +606,7 @@ Step 3: 合并 ('l', 'o') → 'lo' (频率=7)
 ...
 ```
 
-### 实验 2：计算并对比压缩比
+## 实验 2：计算并对比压缩比
 
 ```python
 from transformers import AutoTokenizer
@@ -574,7 +656,7 @@ analyze_tokenizer(tokenizer, test_texts, "MiniMind (vocab=6400)")
 
 ---
 
-## 📝 面试考点总结
+# 📝 面试考点总结
 
 | 面试题 | 关键回答要点 | 追问方向 |
 |--------|-----------|---------|
@@ -586,7 +668,7 @@ analyze_tokenizer(tokenizer, test_texts, "MiniMind (vocab=6400)")
 
 ---
 
-## 🔮 下一节预告
+# 🔮 下一节预告
 
 现在我们知道了如何把文字变成数字（token id），但模型还不能直接处理这些整数。下一节 **L06 · 词嵌入 Embedding**，我们将学习如何把每个 token id 映射到一个高维向量空间，让"国王-男人+女人=女王"这样的语义魔法成为可能！
 
