@@ -315,14 +315,28 @@ t = torch.arange(end)  # [0, 1, 2, ..., max_seq_len-1]
 ```
 
 **第三行：计算旋转角度矩阵**
+- orch.outer(a, b) 是外积，把 a 中的每个数，分别与 b 中的所有数相乘，组成一个矩阵。
+-  列*行 =行列式
 
+![alt text](image-12.png)
 ```python
 freqs = torch.outer(t, freqs)  # (max_seq_len, dim//2) 的矩阵
 ```
+它一次性算出“`每个位置、每个特征对`”的旋转角度`p*θ`，供 RoPE 后续旋转 Q、K 使用。
+```
+假设准备 3 个位置，每个头有两对特征。
+t = [0, 1, 2]       # token 位置
+freqs = [1, 0.1]    # 两对特征各自的频率
 
-每个元素 `freqs[m][i]` = 位置 m × 频率 θ_i = 位置 m 在第 i 组的旋转角度
+执行外积后，freqs=
+                  i=0         i=1
+位置0               0           0
+位置1               1           0.1
+位置2               2           0.2
+```
+freqs里面每个元素都是`pθ`，相当于一份旋转角度表
 
-**第四行：转为复数形式**
+**第四行：角度θ转为复数形式**
 
 ```python
 freqs_cis = torch.polar(torch.ones_like(freqs), freqs)
@@ -343,6 +357,44 @@ def apply_rotary_emb(xq, xk, freqs_cis):
     xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(-2)
     return xq_out.type_as(xq), xk_out.type_as(xk)
 ```
+
+> reshape(*xq.shape[:-1], -1, 2)
+
+*是reshape保留三个参数的维度:xq.shape[:-1]和 -1 和 2
+
+假设之前xq=(2, 3, 8, `96`)：
+
+- xq.shape[:-1]就是取除了最后一个维度的之前的形状，也就是(2, 3, 8)
+- -1, 2就是，把最后一维96拆成(-1,2)
+- 最终相当于：xq.reshape(2, 3, 8,`48, 2`)
+```
+原来  [1, 2, 3, 4, …]       96 个数
+
+变成  [[1, 2],
+       [3, 4],
+       …]                   48 对，每对两个数
+```
+>view_as_complex   实数对---->复数
+
+把最后一维变复数，也就是原来的`维度对`由 [1, 2] → 1 + 2j ，由(2, 3, 8,`48, 2`) 变成(2, 3, 8,`48`)
+
+> xq_ * freqs_cis  执行旋转:
+
+用q乘角度，得到旋转后的q
+
+> view_as_real   复数---->实数对:
+
+```
+旋转后的复数       (2, 3, 8, 48)
+view_as_real 后    (2, 3, 8, 48, 2)
+
+由复数形式变成两个维度对
+```
+>xq.float() 转成 float32
+
+>type_as(xq) 转回 float16
+
+
 
 关键步骤：
 1. 将 Q/K 的相邻两个维度视为复数的实部和虚部
@@ -471,7 +523,7 @@ def precompute_freqs_cis(dim, end, theta=1e6):
 
     Args:
         dim: head_dim（注意不是 d_model），MiniMind 中为 96
-        end: 最大序列长度
+        end: 最大序列长度，适配所有的序列，不一定是当前句子的实际长度。
         theta: 基础频率，MiniMind 使用 1e6（较大，利于长文本）
 
     Returns:
@@ -481,16 +533,18 @@ def precompute_freqs_cis(dim, end, theta=1e6):
     # 频率公式: θ_k = 1 / theta^(2k/dim), k=0,1,...,47
     # 低维度组(k小) → θ_k大 → 旋转快 → 捕捉近距离关系
     # 高维度组(k大) → θ_k小 → 旋转慢 → 捕捉远距离关系
+
+    # (torch.arange(0, dim, 2)生成2i，[: (dim // 2)]只取偶数的维度，两两取维度对，最后如果剩下就截断
     freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
 
-    # 位置索引: [0, 1, 2, ..., end-1]
+    # 创建位置索引 p ：[0, 1, 2, ..., end-1]
+    # device=freqs.device：读取 freqs 所在的设备，并在同一设备上创建 t。
     t = torch.arange(end, device=freqs.device)
 
-    # 外积: freqs[m, k] = m * θ_k，即位置 m 在第 k 组的旋转角度
     freqs = torch.outer(t, freqs)  # (end, dim//2)
 
-    # 转为复数: e^{i*角度} = cos(角度) + i*sin(角度)
-    # 复数乘法天然实现二维旋转
+    # polar 指极坐标形式。这里把每个角度 φ，变成一个复数，实部存 cosφ，虚部存 sinφ。
+    # 后面用它乘 Q、K 的二维特征对，就能执行旋转。即q'=R(α)q
     freqs_cis = torch.polar(torch.ones_like(freqs), freqs)
     return freqs_cis
 
