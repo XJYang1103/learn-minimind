@@ -38,11 +38,11 @@
 
 ### 1.2 数学直觉
 
-假设每层的变换可以简化为乘以一个系数 \(\alpha\)：
+假设每层的变换可以简化为乘以一个系数α：
 
-- 经过 \(n\) 层后，输出 = \(\alpha^n \cdot x\)
-- 如果 \(\alpha = 1.1\)，8 层后：\(1.1^8 \approx 2.14\)（增大 2 倍）
-- 如果 \(\alpha = 0.9\)，8 层后：\(0.9^8 \approx 0.43\)（缩小一半）
+- 经过 n 层后，输出 = $$\alpha^n \cdot x$$
+- 如果 α=1.1，8 层后：（增大 2 倍）$$1.1^8 \approx 2.14$$
+- 如果 α=0.9，8 层后：（缩小一半）$$0.9^8 \approx 0.43$$
 - 如果层数更多（比如 GPT-3 的 96 层），情况会极其严重
 
 归一化的核心思想：**在每层之后，把数据的分布"拉回"到一个稳定的范围**。
@@ -61,7 +61,7 @@ $$
 \text{BN}(x) = \gamma \cdot \frac{x - \mu_B}{\sqrt{\sigma_B^2 + \epsilon}} + \beta
 $$
 
-其中 \(\mu_B\) 和 \(\sigma_B^2\) 是**同一个 batch 内所有样本**在同一特征维度上的均值和方差。
+其中 $$\mu_B$$ 和 $$\sigma_B^2$$ 是**同一个 batch 内所有样本**在同一特征维度上的均值和方差。
 
 #### 归一化维度
 
@@ -81,41 +81,68 @@ BN: 对每个特征维度，跨所有样本计算均值和方差
 
 ### 2.2 LayerNorm（2016）
 
-**Layer Normalization** 专门为 RNN/Transformer 设计。
-
+**Layer Normalization** 对每个 token 的特征向量进行操作，单独计算均值和方差，再调整数值尺度
 #### 公式
 
 $$
 \text{LN}(x) = \gamma \cdot \frac{x - \mu}{\sqrt{\sigma^2 + \epsilon}} + \beta
 $$
 
-其中 \(\mu\) 和 \(\sigma^2\) 是**单个样本的单个位置**在所有特征维度上的均值和方差。
+其中μ和 σ^是**一个向量的所有特征**的**均值**和**方差**。
+```
+假设这个 token 只有 4 个特征。
+x = [1, 3, 5, 7]
+
+1 先求均值。
+μ = (1 + 3 + 5 + 7) ÷ 4 = 4
+
+2 再求方差，也就是“各个数偏离均值的平方，再取平均”。
+σ² = [(1−4)² + (3−4)² + (5−4)² + (7−4)²] ÷ 4= (9 + 1 + 1 + 9) ÷ 4
+
+3 减去均值，再除以标准差。暂时忽略很小的 ε。
+x − μ = [−3, −1, 1, 3]
+
+4 归一化后
+= [−3, −1, 1, 3] ÷ √5
+≈ [−1.342, −0.447, 0.447, 1.342]
+
+5 归一化的结果在经过 γ和β 调整
+
+```
+#### 关键参数
+
+- γ（scale）：可学习的缩放参数，形状 (Dim,)
+- β（shift）：可学习的偏移参数，形状 (Dim,)
+
+作用：
+- 归一化把尺寸统一之后，模型还需要不同的特征具有不同的表达
+- 先规范数值尺度，再学习适合任务的尺度和偏移
+
 
 #### 归一化维度
 
 ```
-输入形状: (Batch, SeqLen, Dim)
-                          ↓ 沿 Dim 维度统计
-LN: 对每个 token，跨所有特征维度计算均值和方差
+输入形状: (2, 3, 768)   2 条序列，每条3个token，一个token是 768 维向量
+             |
+             ↓ 沿 Dim 维度统计  γ、β 则在所有 token 间共享
+LN: 对每个向量，跨所有特征维度计算均值和方差，进行归一化
 ```
 
-#### 关键参数
 
-- \(\gamma\)（scale）：可学习的缩放参数，形状 (Dim,)
-- \(\beta\)（shift）：可学习的偏移参数，形状 (Dim,)
-- \(\epsilon\)：一个极小值（如 1e-5），防止除以零
 
 #### 优点
 
-- 不依赖 batch size
-- 适合变长序列
+- 不依赖 batch size：不考虑batch，只对每个向量为单位操作
+- 适合变长序列 ：不管序列有多少token，都是以token为单位计算的
 - 原始 Transformer（2017）就使用 LayerNorm
 
 ### 2.3 RMSNorm（2019）
 
+![alt text](image-11.png)
+
 **Root Mean Square Layer Normalization** 是对 LayerNorm 的简化。
 
-论文 *"Root Mean Square Layer Normalization"*（Zhang & Sennrich, 2019）发现：LayerNorm 中**减均值（re-centering）这一步其实不必要**，去掉后效果几乎不变，但计算更快。
+LayerNorm 中**减均值（re-centering）这一步其实不必要**，去掉后效果几乎不变，但计算更快。
 
 #### 公式
 
@@ -123,25 +150,45 @@ $$
 \text{RMSNorm}(x) = \gamma \cdot \frac{x}{\text{RMS}(x) + \epsilon}
 $$
 
-其中：
+其中均方根（**`平均平方和`**）为：
 
 $$
-\text{RMS}(x) = \sqrt{\frac{1}{d}\sum_{i=1}^{d} x_i^2}
+\text{RMS}(x) = \sqrt{\frac{1}{d}\sum_{i=1}^{d} x_i^2}+ \epsilon
 $$
+
+
 
 等价写法（MiniMind 代码中的形式）：
-
+- 把`ε写到根号里面，一样
+$$
+\text{RMSNorm}(x) = x \cdot \frac{1}{\sqrt{\text{mean}(x^2) + \epsilon}} \cdot \gamma
+$$
 $$
 \text{RMSNorm}(x) = x \cdot \text{rsqrt}\left(\text{mean}(x^2) + \epsilon\right) \cdot \gamma
 $$
+
+- RMS 衡量数值相对于 0 的整体大小，标准差衡量数值围绕均值的波动。
+- mean 是求平均，`rsqrt` 是**平方根**的**倒数**。
+
+#### γ的形状
+```
+输入 x   (2, 3, 768)
+γ        (768,)
+输出     (2, 3, 768)
+
+γ是全部token共享的，对一个token的每个特征维度乘一个数
+
+通过广播对每个batch，每个token做同样的操作
+```
+
 
 #### RMSNorm vs LayerNorm 对比
 
 | 特性 | LayerNorm | RMSNorm |
 |------|-----------|---------|
-| 减均值 | ✅ 有 | ❌ 去掉了 |
+| `减均值` | ✅ 有 | ❌ 去掉了 |
 | 除方差 | ✅ 有（标准差） | ✅ 有（RMS） |
-| 可学习参数 | γ (scale) + β (shift) | 仅 γ (scale) |
+| 可学习参数 | `γ (scale) + β (shift)` |` 仅 γ (scale) `|
 | 计算量 | 需要算均值+方差 | 只需算均方根 |
 | 效果 | 好 | 几乎一样好 |
 | 速度 | 基准 | 快 ~10-15% |
@@ -202,23 +249,44 @@ MiniMind（以及 GPT-2、LLaMA、Qwen 等现代 LLM）都使用 **Pre-Norm**。
 
 **为什么 Pre-Norm 训练更稳定？**
 
+- 归一化之后数值更稳定，有助于减少数值变化带来的训练波动
+- 残差连接保留了一条直接传递梯度的路径。
+
 关键在于残差连接。Pre-Norm 的梯度路径是：
 
 $$
 \frac{\partial L}{\partial x_l} = \frac{\partial L}{\partial x_L} \cdot \prod_{i=l}^{L-1}\left(1 + \frac{\partial F_i(\text{Norm}(x_i))}{\partial x_i}\right)
 $$
 
-其中 \(+1\) 来自残差连接。因为归一化后的值是有界的，所以 \(\frac{\partial F_i}{\partial x_i}\) 不会太大，保证了梯度的稳定传播。
+其中 +1 来自残差连接。因为归一化后的值是有界的，所以 $$\frac{\partial F_i}{\partial x_i}$$ 不会太大，保证了梯度的稳定传播。
 
----
+- Pre-Norm （minimind的）：
+
+`存在一条直接的 x → 相加 → y 路径，梯度可以沿它回传`
+```
+y = x + F(Norm(x))
+
+x ──────────────────┐
+└→ Norm → F ──────→ 相加 → y
+```
+
+- Post-Norm：
+
+`这里归一化的是 x + F(x) 整体，使残差路径不再是直接的恒等映射。`
+```
+y = Norm(x + F(x))
+
+x ──────────┐
+└→ F(x) ──→ 相加 → Norm → y
+```
 
 ## 4. eps 参数的作用
 
 ### 4.1 防止除以零
 
-RMSNorm 的公式中有一个除法：除以 \(\text{RMS}(x)\)。如果 \(x\) 的所有元素恰好都是 0（虽然极少发生），RMS 就是 0，除以 0 会导致数值溢出。
+RMSNorm 的公式中有一个除法：除以 $$\text{RMS}(x)$$。如果 $$x$$ 的所有元素恰好都是 0（虽然极少发生），RMS 就是 0，除以 0 会导致数值溢出。
 
-\(\epsilon\)（epsilon）是一个极小的正数（MiniMind 中默认 1e-6），加在分母上确保不会除以零：
+（epsilon）是一个极小的正数（MiniMind 中默认 1e-6），加在分母上确保不会除以零：
 
 $$
 \text{RMSNorm}(x) = x \cdot \frac{1}{\sqrt{\text{mean}(x^2) + \epsilon}} \cdot \gamma
@@ -255,33 +323,36 @@ class RMSNorm(nn.Module):
 
 ### 5.2 逐行解析
 
-**`__init__` 方法**：
+```py
+ def __init__(self, dim: int, eps: float = 1e-5): #dim：特征维度，MiniMind 中是 768
+        super().__init__()
+        self.eps = eps  # epsilon防止除0异常
+        self.weight = nn.Parameter(torch.ones(dim)) # γ(768,)，初始化全1
 
-```python
-def __init__(self, dim, eps=1e-6):
-    self.eps = eps                                # 防除零的小常数
-    self.weight = nn.Parameter(torch.ones(dim))   # 可学习的缩放参数 γ，初始化为全1
+    def norm(self, x): #计算 没乘γ前的
+        # mean(-1, )是沿着最后一维求平均，保留前面的batch，token等维度
+        # keepdim=True 是保留求平均的这个维度，把他的大小变成1：
+        """
+        输入 x                     (2, 3, 768)
+        mean(-1, keepdim=True)     (2, 3, 1)  这样让最后一维是1，方便和x进行广播
+        mean(-1, keepdim=False)    (2, 3)
+        """
+        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+
+    def forward(self, x): # 乘γ。
+        """
+        .type_as(x): 把结果转变成x的输入类型，传回x
+
+        原始 x       float16，形状 (2, 3, 768)
+        x.float()      float32，形状 (2, 3, 768)
+        归一化计算      float32，形状 (2, 3, 768)
+        .type_as(x)  float16，形状 (2, 3, 768)
+
+        归一化先用 FP32 计算，再将结果转回原输入 x 的类型
+        """
+        return (self.weight * self.norm(x.float())).type_as(x)
 ```
 
-- `dim`：特征维度，MiniMind 中是 768
-- `weight`：可学习参数 \(\gamma\)，形状 (768,)，初始值全为 1（意味着训练开始时 RMSNorm 几乎是恒等变换）
-
-**`forward` 方法**：
-
-```python
-def forward(self, x):
-    # x 的形状: (batch_size, seq_len, dim)
-    return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps) * self.weight
-```
-
-拆解这一行：
-
-1. `x.pow(2)` → 每个元素平方，形状不变 (batch, seq, dim)
-2. `.mean(-1, keepdim=True)` → 沿最后一个维度求均值 → (batch, seq, 1)
-3. `+ self.eps` → 加上 epsilon → (batch, seq, 1)
-4. `torch.rsqrt(...)` → 取倒数再开方，即 \(1/\sqrt{...}\) → (batch, seq, 1)
-5. `x * ...` → 元素乘法，广播 → (batch, seq, dim)
-6. `* self.weight` → 乘以可学习参数 γ → (batch, seq, dim)
 
 ### 5.3 RMSNorm 在模型中的使用位置
 
@@ -368,7 +439,7 @@ print(f"RMSNorm 均值: {rms_out.mean(-1).mean():.4f}")     # ≠ 0（没有减�
 
 ### Q1：RMSNorm 和 LayerNorm 有什么区别？
 
-**参考答案**：RMSNorm 是 LayerNorm 的简化版本，去掉了"减均值"（re-centering）操作，只保留了"除以 RMS"（re-scaling）操作。同时也去掉了偏置参数 β，只保留了缩放参数 γ。这样做减少了约 10-15% 的计算量，但效果几乎不变。RMSNorm 的公式是 \(x \cdot \text{rsqrt}(\text{mean}(x^2) + \epsilon) \cdot \gamma\)。
+**参考答案**：RMSNorm 是 LayerNorm 的简化版本，去掉了"减均值"（re-centering）操作，只保留了"除以 RMS"（re-scaling）操作。同时也去掉了偏置参数 β，只保留了缩放参数 γ。这样做减少了约 10-15% 的计算量，但效果几乎不变。RMSNorm 的公式是 $$x \cdot \text{rsqrt}(\text{mean}(x^2) + \epsilon) \cdot \gamma$$。
 
 ### Q2：Pre-Norm 和 Post-Norm 有什么区别？为什么现代 LLM 都用 Pre-Norm？
 
@@ -384,7 +455,7 @@ print(f"RMSNorm 均值: {rms_out.mean(-1).mean():.4f}")     # ≠ 0（没有减�
 
 ### Q5：为什么 RMSNorm 去掉减均值操作还能有效？
 
-**参考答案**：归一化的核心目标是控制数值的尺度（magnitude），防止梯度爆炸/消失。RMS（均方根）已经充分捕捉了数值尺度信息。实验表明，减均值（re-centering）带来的额外增益非常有限，去掉后性能几乎不受影响，但计算效率更高。
+**参考答案**：归一化的核心目标是`控制数值的尺度（magnitude），防止梯度爆炸/消失`。RMS（均方根）已经充分捕捉了数值尺度信息。实验表明，减均值（re-centering）带来的额外增益非常有限，去掉后性能几乎不受影响，但计算效率更高。
 
 ### Q6：MiniMind 中一共有多少个 RMSNorm 层？
 
@@ -403,7 +474,7 @@ print(f"RMSNorm 均值: {rms_out.mean(-1).mean():.4f}")     # ≠ 0（没有减�
 <details>
 <summary>查看答案</summary>
 
-1. \(\text{RMS}(x) = \sqrt{\frac{1}{d}\sum_{i=1}^{d} x_i^2}\)
+1. $$\text{RMS}(x) = \sqrt{\frac{1}{d}\sum_{i=1}^{d} x_i^2}$$
 2. **错**。RMSNorm 比 LayerNorm **少了**偏置参数 β，只有缩放参数 γ。
 3. 每个 RMSNorm 只有 γ 参数，形状 (768,)，所以是 **768 个参数**。
 4. BatchNorm 沿 batch 维度统计，依赖 batch size，且不适合变长序列。NLP 任务中每个样本长度不同，同一位置跨 batch 的统计没有语义意义。
@@ -532,7 +603,30 @@ print("\n关键区别: LayerNorm 输出均值=0, RMSNorm 输出均值≠0 (未�
 RMS:  [1.0, 1.0, 1.0, 1.0]
 
 关键区别: LayerNorm 输出均值=0, RMSNorm 输出均值≠0 (未减均值)
+
+
+
+把一个 token 的特征想成三个人的分数。
+原始分数：[60, 80, 100]
+平均分：80
+- LayerNorm 先减去平均分 80，然后再等比例缩小
+
+[60−80, 80−80, 100−80]= [−20, 0, 20]
+
+低出的 20 和高出的 20 正好抵消，平均值就是 0。之后再统一除以标准差（等比例缩小），平均值仍然是 0。
+
+- RMSNorm 把原值直接等比例所辖
+
+[60, 80, 100] → [较小的正数, 较小的正数, 较小的正数]
+
+它们仍然全是正数，平均值当然不会变成 0。
+
+所以区别就在于，减去平均值，会让数值围绕 0 分布；只按比例缩放，没有让平均值变成 0 这个操作。
 ```
+
+
+
+
 
 ### 实验 2：测量 RMSNorm vs LayerNorm 速度差异
 

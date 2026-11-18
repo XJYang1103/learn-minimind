@@ -98,9 +98,9 @@ MiniMind 使用的偏好数据文件是 `dpo.jsonl`。
 
 DPO 基于 Bradley-Terry 偏好模型。给定两个回答 \( y_1 \) 和 \( y_2 \)，人类偏好 \( y_1 \) 的概率为：
 
-\[
+$$
 P(y_1 \succ y_2 | x) = \sigma(r(x, y_1) - r(x, y_2))
-\]
+$$
 
 其中 \( \sigma \) 是 sigmoid 函数，\( r(x, y) \) 是隐含的奖励函数。
 
@@ -108,35 +108,35 @@ P(y_1 \succ y_2 | x) = \sigma(r(x, y_1) - r(x, y_2))
 
 在标准 RLHF 中，我们要最大化：
 
-\[
+$$
 \max_{\pi_\theta} \mathbb{E}_{x \sim D, y \sim \pi_\theta(\cdot|x)}[r(x,y)] - \beta \cdot D_{KL}[\pi_\theta(\cdot|x) \| \pi_{ref}(\cdot|x)]
-\]
+$$
 
 这个优化问题有封闭解：
 
-\[
+$$
 \pi^*(y|x) = \frac{1}{Z(x)} \pi_{ref}(y|x) \exp\left(\frac{r(x,y)}{\beta}\right)
-\]
+$$
 
 反解出奖励函数：
 
-\[
+$$
 r(x,y) = \beta \log \frac{\pi^*(y|x)}{\pi_{ref}(y|x)} + \beta \log Z(x)
-\]
+$$
 
 代入 Bradley-Terry 模型（\( Z(x) \) 恰好被消掉），得到：
 
-\[
+$$
 P(y_w \succ y_l | x) = \sigma\left(\beta \left[\log \frac{\pi_\theta(y_w|x)}{\pi_{ref}(y_w|x)} - \log \frac{\pi_\theta(y_l|x)}{\pi_{ref}(y_l|x)}\right]\right)
-\]
+$$
 
 ### 2.4 DPO 损失函数
 
 最终的 DPO 损失函数就是对上述偏好概率取负对数似然：
 
-\[
+$$
 \mathcal{L}_{DPO}(\pi_\theta; \pi_{ref}) = -\mathbb{E}_{(x, y_w, y_l) \sim D}\left[\log \sigma\left(\beta \left[\log \frac{\pi_\theta(y_w|x)}{\pi_{ref}(y_w|x)} - \log \frac{\pi_\theta(y_l|x)}{\pi_{ref}(y_l|x)}\right]\right)\right]
-\]
+$$
 
 **逐个符号解释：**
 
@@ -155,9 +155,9 @@ P(y_w \succ y_l | x) = \sigma\left(\beta \left[\log \frac{\pi_\theta(y_w|x)}{\pi
 
 定义隐含奖励差：
 
-\[
+$$
 \Delta = \beta \left[\log \frac{\pi_\theta(y_w|x)}{\pi_{ref}(y_w|x)} - \log \frac{\pi_\theta(y_l|x)}{\pi_{ref}(y_l|x)}\right]
-\]
+$$
 
 - 当 \( \Delta \) 越大 → \( \sigma(\Delta) \) 越接近 1 → loss 越小
 - 含义：模型相比参考模型，**更大幅度地提升了 chosen 的概率，降低了 rejected 的概率**
@@ -294,9 +294,9 @@ DPO 的效果严重依赖偏好数据的质量。如果 chosen 和 rejected 的�
 
 **答**：
 
-\[
+$$
 \mathcal{L}_{DPO} = -\mathbb{E}_{(x, y_w, y_l)}\left[\log \sigma\left(\beta \left[\log \frac{\pi_\theta(y_w|x)}{\pi_{ref}(y_w|x)} - \log \frac{\pi_\theta(y_l|x)}{\pi_{ref}(y_l|x)}\right]\right)\right]
-\]
+$$
 
 核心含义是让模型相对于参考模型更多地提升好回答的概率、降低坏回答的概率。β 控制了偏离参考模型的程度。
 
