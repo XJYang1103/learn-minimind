@@ -515,7 +515,7 @@ class Attention(nn.Module):
 - 文件路径：`model/model_minimind.py`
 - 关键代码位置：`precompute_freqs_cis` 函数和 `apply_rotary_emb` 函数
 
-### 核心代码逐行解读
+### 核心代码逐行解读 此处是**`相邻维度配对`**
 
 ```python
 def precompute_freqs_cis(dim, end, theta=1e6):
