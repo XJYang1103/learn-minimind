@@ -68,11 +68,11 @@ $$P(x_1, x_2, ..., x_n) = \prod_{t=1}^{n} P(x_t | x_1, x_2, ..., x_{t-1})$$
 
 $$\mathcal{L} = -\log P(x_{\text{correct}})$$
 
-其中 \(P(x_{\text{correct}})\) 是模型对正确 token 的预测概率。
+其中 $P(x_{\text{correct}})$ 是模型对正确 token 的预测概率。
 
 直觉：
-- 如果模型预测正确 token 的概率为 0.9，loss = \(-\log(0.9) = 0.105\)，很小
-- 如果模型预测正确 token 的概率为 0.01，loss = \(-\log(0.01) = 4.605\)，很大
+- 如果模型预测正确 token 的概率为 0.9，loss = $-\log(0.9) = 0.105$，很小
+- 如果模型预测正确 token 的概率为 0.01，loss = $-\log(0.01) = 4.605$，很大
 
 对整个序列取平均：
 
@@ -137,7 +137,7 @@ input_ids = token_ids[:-1]   # 去掉最后一个
 labels = token_ids[1:]       # 去掉第一个
 ```
 
-这样每个位置 \(t\) 的训练信号就是：给定 \(x_1...x_t\)，预测 \(x_{t+1}\)。
+这样每个位置 $t$ 的训练信号就是：给定 $x_1...x_t$，预测 $x_{t+1}$。
 
 ---
 
@@ -168,12 +168,12 @@ Warmup 之后，学习率按余弦函数逐渐衰减：
 $$\eta_t = \eta_{\min} + \frac{1}{2}(\eta_{\max} - \eta_{\min})\left(1 + \cos\left(\frac{t - t_w}{T - t_w} \cdot \pi\right)\right)$$
 
 其中：
-- \(\eta_{\max}\)：最大学习率
-- \(\eta_{\min}\)：最小学习率
-- \(t_w\)：warmup 步数
-- \(T\)：总训练步数
+- $\eta_{\max}$：最大学习率
+- $\eta_{\min}$：最小学习率
+- $t_w$：warmup 步数
+- $T$：总训练步数
 
-**为什么用余弦而不是线性衰减？** 余弦退火在训练中期衰减较慢，给模型更多时间学习；在训练末期加速衰减，帮助模型精细调整。
+**为什么用余弦而不是线性衰减？** 余弦退火在训练`中期衰减较慢`，给模型更多时间学习；在训练`末期加速衰减`，帮助模型精细调整。
 
 ### 4.4 学习率曲线示意
 
@@ -209,7 +209,9 @@ def get_lr(current_step, warmup_steps, max_steps, max_lr, min_lr):
 
 ### 5.1 什么是混合精度？
 
-默认情况下，模型参数和计算使用 FP32（32位浮点数）。混合精度训练在**计算时使用 FP16/BF16，存储主权重时保留 FP32**，从而：
+默认情况下，模型参数和计算使用 FP32（32位浮点数）。
+
+混合精度训练在**计算时使用 FP16/BF16，存储主权重时保留 FP32**，从而：
 
 1. **减少显存占用**：FP16 占用空间是 FP32 的一半
 2. **加速计算**：现代 GPU（如 3090）有专门的 FP16 计算单元（Tensor Core）
@@ -221,11 +223,11 @@ def get_lr(current_step, warmup_steps, max_steps, max_lr, min_lr):
 |------|------|------|
 | 指数位 | 5 位 | 8 位 |
 | 尾数位 | 10 位 | 7 位 |
-| 数值范围 | 较小 | 与 FP32 相同 |
-| 精度 | 较高 | 较低 |
-| 适用场景 | 需要 loss scaling | 更稳定，推荐使用 |
+| 数值范围 | 较小 | `与 FP32 相同` |
+| 精度 | 较高 | `较低` |
+| 适用场景 | 需要 loss scaling | `更稳定`，推荐使用 |
 
-BF16 的数值范围与 FP32 相同，不容易出现溢出（overflow），是目前训练 LLM 的首选。
+`BF16` 的数值范围与 FP32 相同，`不容易出现溢出`（overflow），是目前训练 LLM 的首选。
 
 ### 5.3 PyTorch AMP 的使用
 
@@ -235,7 +237,7 @@ from torch.cuda.amp import autocast, GradScaler
 scaler = GradScaler()
 
 for batch in dataloader:
-    with autocast(dtype=torch.bfloat16):
+    with autocast (dtype=torch.bfloat16):
         logits = model(input_ids)
         loss = compute_loss(logits, labels)
 
@@ -244,8 +246,49 @@ for batch in dataloader:
     scaler.update()
     optimizer.zero_grad()
 ```
+- `autocast`：自动选择计算精度
+    它让适合的运算使用 FP16，例如一些矩阵乘法，以减少显存占用、加快计算。需要更高精度的运算则按规则保留或使用 FP32。
 
-`GradScaler` 在使用 FP16 时非常重要，它通过放大 loss 来防止梯度下溢（underflow）。使用 BF16 时通常可以省略 scaler。
+- `GradScaler` `放大 Loss`，避免小梯度下溢变成 0
+    - FP16 能表示的数值范围有限，很小的梯度可能因为下溢变成 0，参数就失去了这部分更新信息。使用 BF16 时通常可以省略 scaler。
+    - GradScaler 先将 Loss 乘以一个放大系数，再反向传播：
+
+        原始梯度：       0.00000001
+
+        放大后的梯度：   0.00001024
+
+- `unscale_`先缩小loss，再梯度裁剪
+
+放大loss---计算梯度---缩小loss---梯度裁剪---更新梯度
+```
+真实梯度：[0.003, 0.004]
+范数：0.005，小于阈值 1，本来不需要裁剪，输出[0.003, 0.004]
+
+放大 1000 倍之后，可能需要裁剪，导致最后得到[0.6, 0.8]
+```
+代码：
+
+```py
+scaler = torch.amp.GradScaler("cuda")
+
+# 前向传播，计算 Loss
+with torch.autocast(device_type="cuda", dtype=torch.float16):
+    loss = model(input_ids, labels=labels).loss
+
+scaler.scale(loss).backward()  # 放大 Loss，再计算梯度
+
+scaler.unscale_(optimizer)    # 恢复梯度原来的尺度
+torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+#内部有unscale_，会自动调用，但是由于要梯度裁剪，所以要显示的执行一遍unscale_
+scaler.step(optimizer)        
+scaler.update()              # 调整loss的缩放系数
+optimizer.zero_grad()
+```
+
+
+
+
 
 ---
 
@@ -262,7 +305,15 @@ for batch in dataloader:
 $$\mathbf{g} \leftarrow \frac{\text{max\_norm}}{||\mathbf{g}||_2} \cdot \mathbf{g}, \quad \text{if } ||\mathbf{g}||_2 > \text{max\_norm}$$
 
 ```python
-torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+loss.backward()  # 先算出各参数的梯度，保存在 parameter.grad 中
+
+torch.nn.utils.clip_grad_norm_(
+    model.parameters(),
+    max_norm=1.0
+)  # 原地缩小过大的梯度
+
+optimizer.step()  # 使用裁剪后的梯度更新参数
+optimizer.zero_grad()
 ```
 
 MiniMind 使用 `max_norm=1.0`，这是业界常用的默认值。
@@ -437,7 +488,7 @@ deepspeed trainer/train_pretrain.py --deepspeed ds_config.json
 
 ### Q1: 预训练的目标函数是什么？
 
-**答**：预训练使用 Next Token Prediction 任务，目标函数是交叉熵损失：\(\mathcal{L} = -\frac{1}{N}\sum_{t=1}^{N}\log P(x_t|x_1,...,x_{t-1})\)。模型在每个位置预测下一个 token 的概率分布，通过最小化交叉熵损失来训练。
+**答**：预训练使用 Next Token Prediction 任务，目标函数是交叉熵损失：$\mathcal{L} = -\frac{1}{N}\sum_{t=1}^{N}\log P(x_t|x_1,...,x_{t-1})$。模型在每个位置预测下一个 token 的概率分布，通过最小化交叉熵损失来训练。
 
 ### Q2: 学习率 Warmup 的作用是什么？
 

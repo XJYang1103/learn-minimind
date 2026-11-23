@@ -4,7 +4,7 @@
 
 ---
 
-## 📋 本节目标
+# 📋 本节目标
 
 学完本节，你将能够：
 
@@ -17,7 +17,7 @@
 
 ---
 
-## 🔗 前置知识
+# 🔗 前置知识
 
 - [L09 · 注意力机制与 GQA](L09-注意力机制与GQA.md)——了解 Attention 的输出
 - 线性代数：矩阵乘法
@@ -25,14 +25,14 @@
 
 ---
 
-## 1. FFN 在 Transformer 中的角色
+# 1. FFN 在 Transformer 中的角色
 
-### 1.1 Attention 和 FFN：两大核心组件
+## 1.1 Attention 和 FFN：两大核心组件
 
 每个 Transformer Block 由两个子层组成：
 
 ```
-输入 → RMSNorm → Attention → 残差连接 → RMSNorm → FFN → 残差连接 → 输出
+输入 → [RMSNorm → Attention → 残差连接] → [RMSNorm → FFN → 残差连接] → 输出
        ↑                                  ↑
        token 间交流                        token 独立处理
 ```
@@ -40,7 +40,7 @@
 - **Attention**：让 token 之间互相交流信息（"社交环节"）
 - **FFN**：每个 token 独立地通过一个非线性变换（"个人学习环节"）
 
-### 1.2 FFN 为什么被称为"知识仓库"？
+## 1.2 FFN 为什么被称为"知识仓库"？
 
 有研究表明，Transformer 的"事实性知识"（比如"北京是中国的首都"）主要存储在 FFN 层的参数中，而 Attention 层主要负责"路由"——决定把哪些信息传递给谁。
 
@@ -48,7 +48,7 @@
 - **Attention** 是"快递员"——负责在 token 之间传递信息
 - **FFN** 是"图书馆"——每个 token 到图书馆里查阅知识，丰富自己的信息
 
-### 1.3 "每个 token 独立处理"是什么意思？
+## 1.3 "每个 token 独立处理"是什么意思？
 
 FFN 对每个 token 的处理是**完全独立的**——第 1 个 token 过 FFN 时不知道第 2 个 token 的存在。这与 Attention 形成互补。
 
@@ -62,9 +62,9 @@ for token in tokens:
 
 ---
 
-## 2. 传统 FFN：最简单的形式
+# 2. 传统 FFN：最简单的形式
 
-### 2.1 原始 Transformer 的 FFN
+## 2.1 原始 Transformer 的 FFN
 
 $$
 \text{FFN}(x) = \text{ReLU}(x \mathbf{W}_1 + b_1) \mathbf{W}_2 + b_2
@@ -76,7 +76,7 @@ $$
 x(768维) → Linear(768→3072) → ReLU → Linear(3072→768) → output(768维)
 ```
 
-### 2.2 扩展比
+## 2.2 扩展比
 
 FFN 的中间层维度通常是 d_model 的 **4 倍**：
 
@@ -86,16 +86,16 @@ $$
 
 对于 d_model=768，传统 FFN 的中间维度 = 3072。
 
-**为什么要先扩大再缩小？**
+## 为什么要`先扩大再缩小`？
 
 想象你在做思考：
 1. 先把问题"展开"——从 768 维扩展到 3072 维，在更大的空间里分析
-2. 在高维空间里做非线性变换（激活函数）
+2. 在`高维`空间里做非线性变换（`激活函数`）
 3. 再"总结"回 768 维
 
-这就像先做发散思维，再做收敛总结。中间的高维空间让 FFN 有更强的表达能力。
+这就像先做发散思维，再做收敛总结。中间的**高维空间**让 FFN 有**更强的表达能力**。
 
-### 2.3 ReLU 的问题
+## 2.3 ReLU 的问题
 
 $$
 \text{ReLU}(x) = \max(0, x)
@@ -107,9 +107,9 @@ ReLU 简单高效，但有一个问题：**Dead Neuron（神经元死亡）**。
 
 ---
 
-## 3. 门控线性单元 GLU 家族
+# 3. 门控线性单元 GLU 家族
 
-### 3.1 GLU 的核心思想
+## 3.1 GLU 的核心思想
 
 **GLU（Gated Linear Unit）** 引入了"门控"机制——用一路信号来控制另一路信号的通过量。
 
@@ -117,29 +117,36 @@ $$
 \text{GLU}(x) = (x\mathbf{W}_1) \otimes \sigma(x\mathbf{W}_3)
 $$
 
-其中 \(\otimes\) 是元素乘法，\(\sigma\) 是 sigmoid 函数。
+其中 $\otimes$ 是元素乘法，$\sigma$ 是 sigmoid 函数。
 
-直觉：
-- \(x\mathbf{W}_1\)：候选信息（"这是我想说的"）
-- \(\sigma(x\mathbf{W}_3)\)：门控信号，值在 [0,1] 之间（"这些信息中哪些该通过"）
-- 两者相乘：只让"该通过"的信息通过
+GLU（Gated Linear Unit，门控线性单元）的核心是：一条分支生成内容，另一条分支控制这些内容通过多少。
+```
+假设内容分支产生：
+内容：[ 2,  3, −4]
+门控：[0.9, 0.1, 0.5]
 
-### 3.2 GLU 变体
+两条分支逐元素相乘：
+结果：[1.8, 0.3, −2]
+第一个特征保留得多，第二个特征被明显削弱。
+```
+门控值由输入经过可训练的线性层计算出来，模型通过训练学习如何调节各个特征。
+
+## 3.2 GLU 变体
 
 不同的激活函数产生不同的 GLU 变体：
 
 | 变体 | 门控激活函数 | 公式 |
 |------|------------|------|
-| GLU | Sigmoid | \((xW_1) \otimes \sigma(xW_3)\) |
-| ReGLU | ReLU | \((xW_1) \otimes \text{ReLU}(xW_3)\) |
-| GEGLU | GELU | \((xW_1) \otimes \text{GELU}(xW_3)\) |
-| **SwiGLU** | **SiLU (Swish)** | \(\text{SiLU}(xW_1) \otimes (xW_3)\) |
+| GLU | Sigmoid | $(xW_1) \otimes \sigma(xW_3)$ |
+| ReGLU | ReLU | $(xW_1) \otimes \text{ReLU}(xW_3)$ |
+| GEGLU | GELU | $(xW_1) \otimes \text{GELU}(xW_3)$ |
+| **SwiGLU** | **SiLU (Swish)** | $\text{SiLU}(xW_1) \otimes (xW_3)$ |
 
 ---
 
-## 4. SwiGLU 详解
+# 4. SwiGLU 详解
 
-### 4.1 SiLU 激活函数
+## 4.1 SiLU 激活函数
 
 SiLU（Sigmoid Linear Unit），也叫 Swish：
 
@@ -147,33 +154,33 @@ $$
 \text{SiLU}(x) = x \cdot \sigma(x) = \frac{x}{1 + e^{-x}}
 $$
 
-#### 图形对比
+## 图形对比
+![alt text](image-13.png)
 
-```
-         ReLU              SiLU (Swish)
-    y│   /                y│    /
-     │  /                  │   /
-     │ /                   │  /
-─────┼────── x        ────┼──~──── x
-     │                     │ ╰ 小的负值区域
-     │                     │   (平滑过渡)
-```
 
-#### SiLU 的特点
+## SiLU 的特点
 
 1. **平滑**：不像 ReLU 在 x=0 处有"尖角"，SiLU 处处可微
 2. **非单调**：在 x 略小于 0 的区域，SiLU 有一个小的负值（不是直接截断为 0）
 3. **无上界，有下界**：输出范围约 [-0.278, +∞)
 4. **自门控**：x 自己控制自己的通过量（sigmoid(x) 决定 x 的多少能通过）
 
-#### 为什么 SiLU 比 ReLU 好？
+## 为什么 SiLU 比 ReLU 好？
 
 - ReLU 的"硬截断"会导致信息丢失和神经元死亡
 - SiLU 的"软截断"保留了负值区域的少量信息，梯度更平滑
 - 实验表明 SiLU 在大规模语言模型中一致优于 ReLU
 
-### 4.2 SwiGLU 的完整公式
+## 4.2 SwiGLU 的完整公式
+- `普通GLU`:
 
+$$
+\text{GLU}(x) =\sigma(x\mathbf{W}_1)  \otimes (x\mathbf{W}_3)
+$$
+
+- `SwiGLU `
+
+将 sigmoid 换成 SiLU
 $$
 \text{SwiGLU}(x) = \text{SiLU}(x\mathbf{W}_1) \otimes (x\mathbf{W}_3)
 $$
@@ -184,16 +191,16 @@ $$
 \text{FFN}_{\text{SwiGLU}}(x) = \left[\text{SiLU}(x\mathbf{W}_1) \otimes (x\mathbf{W}_3)\right] \mathbf{W}_2
 $$
 
-### 4.3 直觉理解
+## 4.3 直觉理解
 
 把 SwiGLU 想象成一个"智慧门卫"：
 
-1. **\(x\mathbf{W}_3\)**（up_proj）：把信息"搬运"到高维空间——"这是所有的候选信息"
-2. **\(\text{SiLU}(x\mathbf{W}_1)\)**（gate_proj）：生成门控信号——"这些信息中哪些是重要的"
-3. **元素乘法 \(\otimes\)**：门卫只放行重要的信息
-4. **\(\mathbf{W}_2\)**（down_proj）：把结果投影回原来的维度——"总结一下"
+1. **$x\mathbf{W}_3$**（up_proj）：把信息"搬运"到高维空间——"这是所有的候选信息"
+2. **$\text{SiLU}(x\mathbf{W}_1)$**（gate_proj）：生成门控信号——"这些信息中哪些是重要的"
+3. **元素乘法 $\otimes$**：门卫只放行重要的信息
+4. **$\mathbf{W}_2$**（down_proj）：把结果投影回原来的维度——"总结一下"
 
-### 4.4 为什么 SwiGLU 比传统 FFN 好？
+## 4.4 为什么 SwiGLU 比传统 FFN 好？
 
 1. **门控机制**：让模型学会"选择性遗忘"，不是所有信息都要通过
 2. **更平滑的梯度**：SiLU 比 ReLU 的梯度更平滑，训练更稳定
@@ -202,19 +209,21 @@ $$
 
 ---
 
-## 5. MiniMind 中的 FFN 实现
+# 5. MiniMind 中的 FFN 实现
 
-### 5.1 三个线性层
+## 5.1 三个线性层
 
 MiniMind 的 FFN 有三个线性层，对应 SwiGLU 的三个矩阵：
 
+例如输入每个 token 是 8 维，内部扩展到 12 维，最后再变回 8 维。
+
 | 代码名称 | 对应矩阵 | 作用 | 形状 |
 |---------|---------|------|------|
-| `gate_proj` (w1) | \(\mathbf{W}_1\) | 门控投影 | (d_model, d_ff) |
-| `up_proj` (w3) | \(\mathbf{W}_3\) | 上投影 | (d_model, d_ff) |
-| `down_proj` (w2) | \(\mathbf{W}_2\) | 下投影 | (d_ff, d_model) |
+| `gate_proj` (w1) | $\mathbf{W}_1$ | 门控投影 | 8 → 12 |
+| `up_proj` (w3) | $\mathbf{W}_3$ | 上投影 | 	8 → 12 |
+| `down_proj` (w2) | $\mathbf{W}_2$ | 下投影 | 	12 → 8 |
 
-### 5.2 MiniMind 源码
+## 5.2 MiniMind 源码
 
 在 `model/model_minimind.py` 中：
 
@@ -222,34 +231,49 @@ MiniMind 的 FFN 有三个线性层，对应 SwiGLU 的三个矩阵：
 class FeedForward(nn.Module):
     def __init__(self, config):
         super().__init__()
-        hidden_dim = config.multiple_of * (
+        # middle_dim就是FFN内部升维到的维度
+        middle_dim = config.multiple_of * (
             (2 * config.dim * 4 // 3 + config.multiple_of - 1) // config.multiple_of
         )
-        self.gate_proj = nn.Linear(config.dim, hidden_dim, bias=False)  # W1
-        self.down_proj = nn.Linear(hidden_dim, config.dim, bias=False)  # W2
-        self.up_proj = nn.Linear(config.dim, hidden_dim, bias=False)    # W3
+        self.gate_proj = nn.Linear(config.dim, middle_dim, bias=False) # W1
+        self.up_proj   = nn.Linear(config.dim, middle_dim, bias=False) # W3  
+        self.down_proj = nn.Linear(middle_dim, config.dim, bias=False)  
+        
 
     def forward(self, x):
         return self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x))
 ```
 
-### 5.3 Forward 一行代码的解析
+## 5.3 Forward 一行代码的解析
 
 ```python
 return self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x))
 ```
+即
+$$
+\text{SwiGLU}(x) = \text{SiLU}(x\mathbf{W}_1) \otimes (x\mathbf{W}_3)
+$$
 
 拆解：
 
-```python
-gate = self.gate_proj(x)     # x @ W1 → (batch, seq, hidden_dim)
-gate = F.silu(gate)           # SiLU 激活 → (batch, seq, hidden_dim)
-up = self.up_proj(x)          # x @ W3 → (batch, seq, hidden_dim)
-hidden = gate * up            # 门控 × 候选 → (batch, seq, hidden_dim)
-output = self.down_proj(hidden)  # hidden @ W2 → (batch, seq, d_model)
+```
+                  输入 x (2, 3, 8)
+                    /          \
+             gate_proj       up_proj
+                 ↓               ↓
+             (2, 3, 12)      (2, 3, 12)
+                 ↓               │
+                SiLU             │
+                 └────逐元素相乘──┘
+                          ↓
+                     (2, 3, 12)
+                          ↓
+                      down_proj
+                          ↓
+                      (2, 3, 8)
 ```
 
-### 5.4 数据流维度追踪
+## 5.4 数据流维度追踪
 
 ```
 输入 x:        (batch, seq, 768)
@@ -269,15 +293,15 @@ gate * up:     (batch, seq, hidden_dim)  ← 元素乘法
 
 ---
 
-## 6. 扩展比与 hidden_dim 的计算
+# 6. 扩展比与 hidden_dim 的计算
 
-### 6.1 传统 FFN 的扩展比
+## 6.1 传统 FFN 的扩展比
 
 传统 FFN 的中间维度 = d_model × 4 = 768 × 4 = 3072。
 
 但 SwiGLU 有**三个**线性层（比传统 FFN 多一个），为了保持总参数量不变，需要适当缩小中间维度。
 
-### 6.2 MiniMind 的 hidden_dim 计算
+## 6.2 MiniMind 的 hidden_dim 计算
 
 ```python
 hidden_dim = config.multiple_of * (
@@ -289,13 +313,13 @@ hidden_dim = config.multiple_of * (
 
 1. **缩小系数**：`2 * dim * 4 // 3 = 2 * 768 * 4 // 3 = 2048`
 
-   传统 FFN 用 2 个矩阵，中间维度 4d；SwiGLU 用 3 个矩阵，为保持参数量一致，中间维度调整为约 \(\frac{8d}{3} \approx 2.67d\)。
+   传统 FFN 用 2 个矩阵，中间维度 4d；SwiGLU 用 3 个矩阵，为保持参数量一致，中间维度调整为约 $\frac{8d}{3} \approx 2.67d$。
 
 2. **对齐到 multiple_of**：为了 GPU 计算效率，向上取整到 `multiple_of`（通常是 64 或 256）的整数倍。
 
 最终 MiniMind 的 hidden_dim 大约是 2048（具体值取决于配置中的 `multiple_of`）。
 
-### 6.3 参数量计算
+## 6.3 参数量计算
 
 ```
 gate_proj: 768 × hidden_dim
@@ -310,17 +334,17 @@ down_proj: hidden_dim × 768
 8 层总计: 4.7M × 8 ≈ 37.7M
 ```
 
-**FFN 是 MiniMind 中参数量最大的模块**！占总参数（64M）的约 59%。
+**`FFN 是 MiniMind 中参数量最大的模块`**！占总参数（64M）的约 59%。
 
-### 6.4 为什么 FFN 参数占比这么大？
+## 6.4 为什么 FFN 参数占比这么大？
 
 这正好印证了"FFN 是知识仓库"的说法。FFN 用大量参数存储了模型学到的知识——从语法规则到世界知识。
 
 ---
 
-## 7. MoE 的引子：FFN 是替换目标
+# 7. MoE 的引子：FFN 是替换目标
 
-### 7.1 Mixture of Experts（MoE）
+## 7.1 Mixture of Experts（MoE）
 
 MoE（混合专家模型）的核心思想：不是让所有 token 都过同一个大 FFN，而是设置多个小的"专家"FFN，每个 token 只激活其中 1-2 个专家。
 
@@ -347,9 +371,9 @@ MoE:  token → Router(路由器) → 选择 2/8 个专家
 
 ---
 
-## 8. 动手实验
+# 8. 动手实验
 
-### 8.1 对比 ReLU 和 SiLU
+## 8.1 对比 ReLU 和 SiLU
 
 ```python
 import torch
@@ -372,7 +396,7 @@ plt.grid(True, alpha=0.3)
 plt.show()
 ```
 
-### 8.2 实现一个简化版 SwiGLU FFN
+## 8.2 实现一个简化版 SwiGLU FFN
 
 ```python
 import torch
@@ -399,35 +423,35 @@ print(f"参数量: {sum(p.numel() for p in ffn.parameters()):,}")
 
 ---
 
-## 🎤 面试考点
+# 🎤 面试考点
 
-### Q1：SwiGLU 的公式是什么？它比传统 FFN 好在哪里？
+## Q1：SwiGLU 的公式是什么？它比传统 FFN 好在哪里？
 
-**参考答案**：SwiGLU 的公式是 \(\text{FFN}(x) = [\text{SiLU}(xW_1) \otimes (xW_3)] W_2\)。相比传统 FFN（ReLU(xW_1)W_2），SwiGLU 的优势在于：（1）门控机制让模型能选择性地传递信息；（2）SiLU 激活函数比 ReLU 更平滑，避免神经元死亡；（3）两条路径的交互（gate 和 up）比单路径有更强的表达能力。Google 的实验表明 SwiGLU 在多个基准上优于 ReLU FFN。
+**参考答案**：SwiGLU 的公式是 $\text{FFN}(x) = [\text{SiLU}(xW_1) \otimes (xW_3)] W_2$。相比传统 FFN（ReLU(xW_1)W_2），SwiGLU 的优势在于：（1）门控机制让模型能选择性地传递信息；（2）SiLU 激活函数比 ReLU 更平滑，避免神经元死亡；（3）两条路径的交互（gate 和 up）比单路径有更强的表达能力。Google 的实验表明 SwiGLU 在多个基准上优于 ReLU FFN。
 
-### Q2：FFN 为什么能存储知识？
+## Q2：FFN 为什么能存储知识？
 
 **参考答案**：研究表明，Transformer 的 FFN 层类似于一个键值记忆网络。FFN 的第一层（gate_proj/up_proj）将输入映射到一个高维空间，相当于"匹配键"；第二层（down_proj）将匹配结果映射回模型维度，相当于"取出值"。大量的参数让 FFN 能记住训练数据中的事实知识，如"北京是中国的首都"等。这也是为什么模型越大（FFN 参数越多）知识越丰富。
 
-### Q3：SwiGLU 中为什么有三个线性层而不是两个？
+## Q3：SwiGLU 中为什么有三个线性层而不是两个？
 
 **参考答案**：传统 FFN 只有两个线性层（up 和 down）。SwiGLU 引入了门控机制，需要一路做"门控信号"（gate_proj，经过 SiLU），一路做"候选信息"（up_proj），两路相乘后再通过 down_proj 投影回原维度。因此需要三个线性层。为了保持与传统 FFN 相近的参数量，SwiGLU 的中间维度从 4d 缩小到约 8d/3。
 
-### Q4：FFN 的扩展比是什么？MiniMind 中怎么计算？
+## Q4：FFN 的扩展比是什么？MiniMind 中怎么计算？
 
 **参考答案**：扩展比是 FFN 中间维度与 d_model 的比值。传统 FFN 通常是 4 倍（768→3072→768）。MiniMind 使用 SwiGLU，为了补偿第三个线性层的参数开销，将扩展比调整为约 8/3 倍（768→~2048→768）。实际的 hidden_dim 还会向上取整到 `multiple_of` 的整数倍以提高 GPU 计算效率。
 
-### Q5：SiLU 和 ReLU 有什么区别？
+## Q5：SiLU 和 ReLU 有什么区别？
 
 **参考答案**：ReLU(x) = max(0, x)，在 x<0 时直接截断为 0，不可微（x=0 处）。SiLU(x) = x·sigmoid(x)，是一个平滑函数，在负值区域有微小的负输出而非完全截断。SiLU 的优点是：（1）处处可微，梯度更平滑；（2）避免神经元死亡问题；（3）非单调性让模型有更强的表达能力。
 
-### Q6：为什么说 FFN 是 MoE 替换的目标？
+## Q6：为什么说 FFN 是 MoE 替换的目标？
 
 **参考答案**：FFN 是 Transformer Block 中参数量最大的模块（约占 60%），它被认为是"知识仓库"。MoE 的思路是把一个大 FFN 替换为多个小的"专家 FFN"，每个 token 只激活少量专家。这样可以在不增加推理计算量的前提下大幅增加模型的总参数量（即知识容量），同时让不同类型的 token 被不同的"专家"处理，实现专业化分工。
 
 ---
 
-## ✅ 自测题
+# ✅ 自测题
 
 1. **填空**：SwiGLU 使用的激活函数是 ______，其公式为 ______。
 2. **计算**：假设 d_model=768，hidden_dim=2048，一个 SwiGLU FFN 层的总参数量是多少？
@@ -438,7 +462,7 @@ print(f"参数量: {sum(p.numel() for p in ffn.parameters()):,}")
 <details>
 <summary>查看答案</summary>
 
-1. **SiLU（也叫 Swish）**；公式：\(\text{SiLU}(x) = x \cdot \sigma(x) = x / (1 + e^{-x})\)
+1. **SiLU（也叫 Swish）**；公式：$\text{SiLU}(x) = x \cdot \sigma(x) = x / (1 + e^{-x})$
 2. gate_proj: 768×2048 = 1,572,864；up_proj: 768×2048 = 1,572,864；down_proj: 2048×768 = 1,572,864；总计 **4,718,592 ≈ 4.7M**
 3. **错**。FFN 对每个 token 独立处理，不同 token 之间不会互相影响（但它们共享同一套参数）。
 4. 为了控制总参数量。传统 FFN 有 2 个矩阵（d×4d + 4d×d = 8d²），SwiGLU 有 3 个矩阵。如果中间维度仍用 4d，总参数 = 3×(d×4d) = 12d²，比传统多 50%。缩小到 8d/3 后，参数 ≈ 3×(d×8d/3) = 8d²，与传统 FFN 一致。
@@ -448,7 +472,7 @@ print(f"参数量: {sum(p.numel() for p in ffn.parameters()):,}")
 
 ---
 
-## 🎨 哆啦A梦图解
+# 🎨 哆啦A梦图解
 
 ![SwiGLU门控机制](../assets/comics/08-swiglu.png)
 
@@ -456,13 +480,13 @@ print(f"参数量: {sum(p.numel() for p in ffn.parameters()):,}")
 
 ---
 
-## 🔬 源码深度解析
+# 🔬 源码深度解析
 
-### MiniMind 对应文件
+## MiniMind 对应文件
 - 文件路径：`model/model_minimind.py`
 - 关键代码位置：`FeedForward` 类的 `__init__` 和 `forward` 方法
 
-### 核心代码逐行解读
+## 核心代码逐行解读
 
 ```python
 class FeedForward(nn.Module):
@@ -493,7 +517,7 @@ class FeedForward(nn.Module):
         return self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x))
 ```
 
-### 设计决策解析
+## 设计决策解析
 
 1. **hidden_dim 的计算逻辑**：`2 * dim * 4 // 3` ≈ 2.67d。传统 FFN 用 2 个矩阵和 4d 中间维度，总参数 = 2 × d × 4d = 8d²。SwiGLU 用 3 个矩阵和 ~2.67d 中间维度，总参数 = 3 × d × 2.67d ≈ 8d²，保持参数量一致。
 
@@ -503,9 +527,9 @@ class FeedForward(nn.Module):
 
 ---
 
-## 🧪 动手实验
+# 🧪 动手实验
 
-### 实验 1：对比 ReLU、GELU、SiLU 激活函数
+## 实验 1：对比 ReLU、GELU、SiLU 激活函数
 
 ```python
 import torch
@@ -558,7 +582,7 @@ print(f"3. SiLU 最小值 ≈ {silu.min():.3f}，出现在 x ≈ {x[silu.argmin(
 3. SiLU 最小值 ≈ -0.278，出现在 x ≈ -1.28
 ```
 
-### 实验 2：验证 SwiGLU 的中间维度和参数量
+## 实验 2：验证 SwiGLU 的中间维度和参数量
 
 ```python
 import torch
@@ -627,7 +651,7 @@ SwiGLU 输出:   torch.Size([2, 10, 768])
 
 ---
 
-## 📝 面试考点总结
+# 📝 面试考点总结
 
 | 面试题 | 关键回答要点 | 追问方向 |
 |--------|-----------|---------|
@@ -639,7 +663,7 @@ SwiGLU 输出:   torch.Size([2, 10, 768])
 
 ---
 
-## 🔮 下一节预告
+# 🔮 下一节预告
 
 恭喜你！到这里，你已经掌握了 MiniMind 模型的**所有核心组件**：
 
@@ -649,7 +673,7 @@ SwiGLU 输出:   torch.Size([2, 10, 768])
 
 ---
 
-## 📝 Phase 2 总结
+# 📝 Phase 2 总结
 
 | 组件 | 作用 | MiniMind 特点 |
 |------|------|--------------|
